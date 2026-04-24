@@ -23,7 +23,7 @@ def fetch_lobsters(limit=20):
                 "title": item["title"],
                 "url": item["url"],
                 "score": item["score"],
-                "comments": item["comments_count"],
+                "comments": item["comment_count"],
                 "source": "Lobste.rs",
             })
     except Exception as e:
