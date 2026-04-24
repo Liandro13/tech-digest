@@ -7,10 +7,14 @@ from datetime import datetime
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
-TO_EMAIL = os.environ["TO_EMAIL"]
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Tech Digest <onboarding@resend.dev>")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+def load_subscribers() -> list[str]:
+    with open("subscribers.txt") as f:
+        return [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 
 def fetch_lobsters(limit=20):
@@ -173,13 +177,14 @@ def main():
     html = build_html(digest)
 
     resend.api_key = RESEND_API_KEY
+    subscribers = load_subscribers()
     result = resend.Emails.send({
         "from": FROM_EMAIL,
-        "to": [TO_EMAIL],
+        "to": subscribers,
         "subject": digest["digest_title"],
         "html": html,
     })
-    print(f"Email sent! ID: {result['id']}")
+    print(f"Email sent to {len(subscribers)} subscriber(s)! ID: {result['id']}")
 
 
 if __name__ == "__main__":
