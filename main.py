@@ -2,7 +2,7 @@ import os
 import json
 import requests
 import resend
-import google.generativeai as genai
+from google import genai
 from datetime import datetime
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
@@ -10,31 +10,24 @@ RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 TO_EMAIL = os.environ["TO_EMAIL"]
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Tech Digest <onboarding@resend.dev>")
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.0-flash")
-
-SUBREDDITS = ["programming", "technology", "MachineLearning", "devops", "webdev", "artificial", "golang", "rust"]
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-def fetch_reddit(limit=12):
-    headers = {"User-Agent": "TechDigest/1.0"}
+def fetch_lobsters(limit=20):
     posts = []
-    for sub in SUBREDDITS:
-        try:
-            url = f"https://www.reddit.com/r/{sub}/top.json?t=week&limit={limit}"
-            r = requests.get(url, headers=headers, timeout=10)
-            r.raise_for_status()
-            for item in r.json()["data"]["children"]:
-                p = item["data"]
-                posts.append({
-                    "title": p["title"],
-                    "url": p.get("url", f"https://reddit.com{p.get('permalink', '')}"),
-                    "score": p["score"],
-                    "comments": p["num_comments"],
-                    "source": f"Reddit r/{sub}",
-                })
-        except Exception as e:
-            print(f"Reddit r/{sub} error: {e}")
+    try:
+        r = requests.get("https://lobste.rs/hottest.json", timeout=10)
+        r.raise_for_status()
+        for item in r.json()[:limit]:
+            posts.append({
+                "title": item["title"],
+                "url": item["url"],
+                "score": item["score"],
+                "comments": item["comments_count"],
+                "source": "Lobste.rs",
+            })
+    except Exception as e:
+        print(f"Lobste.rs error: {e}")
     return posts
 
 
@@ -109,7 +102,7 @@ Posts:
 {posts_text}
 """
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     text = response.text.strip()
     if text.startswith("```"):
         text = text.split("```")[1]
@@ -167,11 +160,11 @@ def build_html(digest: dict) -> str:
 
 def main():
     print("Fetching posts...")
-    reddit = fetch_reddit()
+    lobsters = fetch_lobsters()
     hn = fetch_hackernews()
     devto = fetch_devto()
-    all_posts = reddit + hn + devto
-    print(f"Total: {len(all_posts)} posts (Reddit={len(reddit)}, HN={len(hn)}, dev.to={len(devto)})")
+    all_posts = lobsters + hn + devto
+    print(f"Total: {len(all_posts)} posts (Lobste.rs={len(lobsters)}, HN={len(hn)}, dev.to={len(devto)})")
 
     print("Curating with Gemini...")
     digest = curate_with_gemini(all_posts)
