@@ -4,6 +4,11 @@ import requests
 import resend
 from google import genai
 from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent.parent / ".env")       # shared: GEMINI_API_KEY
+load_dotenv(Path(__file__).parent / ".env", override=True)  # local: project-specific overrides
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
