@@ -102,7 +102,7 @@ Posts:
 {posts_text}
 """
 
-    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    response = client.models.generate_content(model="gemini-2.5-pro", contents=prompt)
     text = response.text.strip()
     if text.startswith("```"):
         text = text.split("```")[1]
