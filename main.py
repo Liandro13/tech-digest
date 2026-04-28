@@ -3,6 +3,7 @@ import json
 import requests
 import resend
 from google import genai
+from groq import Groq
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -14,7 +15,38 @@ GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Tech Digest <onboarding@resend.dev>")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
+
+
+def _call_llm(prompt: str) -> str:
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    for model in GEMINI_MODELS:
+        try:
+            response = gemini_client.models.generate_content(model=model, contents=prompt)
+            return response.text
+        except Exception as e:
+            err = str(e)
+            if any(code in err for code in ("503", "429", "UNAVAILABLE", "EXHAUSTED")):
+                print(f"Gemini {model} indisponível, tentando próximo...")
+                continue
+            raise
+    groq_key = os.environ.get("GROQ_API_KEY")
+    if not groq_key:
+        raise RuntimeError("Todos os modelos Gemini falharam e GROQ_API_KEY não está definida")
+    groq_client = Groq(api_key=groq_key)
+    for model in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+        try:
+            resp = groq_client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+            )
+            return resp.choices[0].message.content
+        except Exception as e:
+            if "429" in str(e) or "rate_limit" in str(e).lower():
+                continue
+            raise
+    raise RuntimeError("Todos os providers falharam")
 
 
 def load_subscribers() -> list[str]:
@@ -133,8 +165,8 @@ Posts:
 {posts_text}
 """
 
-    response = client.models.generate_content(model="gemini-2.5-pro", contents=prompt)
-    text = response.text.strip()
+    response = _call_llm(prompt)
+    text = response.strip()
     if text.startswith("```"):
         text = text.split("```")[1]
         if text.startswith("json"):
@@ -165,8 +197,8 @@ Repositórios:
 {repos_text}
 """
 
-    response = client.models.generate_content(model="gemini-2.5-pro", contents=prompt)
-    text = response.text.strip()
+    response = _call_llm(prompt)
+    text = response.strip()
     if text.startswith("```"):
         text = text.split("```")[1]
         if text.startswith("json"):
